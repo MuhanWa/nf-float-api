@@ -17,13 +17,15 @@ package com.memverge.nextflow
 
 import spock.lang.Specification
 
-class FloatJobTest extends Specification {
+class CmdResultTest extends Specification {
     def "retrieve job ID from the query output"() {
         given:
-        final ndJobID = "fd9gd1-23"
-        final floatJobID = "float-job-id"
-        final out = """
-            id: $floatJobID
+        def res = new CmdResult()
+        def id = "myJobId"
+
+        when:
+        res.out = """
+            id: ${id}
             name: cactus-
             user: admin
             imageID: docker.io/memverge/cactus:latest
@@ -35,35 +37,27 @@ class FloatJobTest extends Specification {
                 policy: spotOnly
                 retryLimit: 3
                 retryInterval: 10m0s
-            customTags:
-                nf-job-id: $ndJobID
         """.stripIndent().trim()
 
-        when:
-        final job = FloatJob.parse(out)
-
         then:
-        job.nfJobID == ndJobID
-        job.floatJobID == floatJobID
-        job.status == FloatStatus.PENDING
-        job.rc == ""
-        job.rcCode == null
+        res.jobID() == id
     }
 
     def "parse ID when output is empty"() {
         when:
-        final job = FloatJob.parse("")
+        def res = new CmdResult()
 
         then:
-        job.nfJobID == ""
+        res.jobID() == ""
     }
 
     def "show job detail"() {
         given:
-        final id = 'myJob-0'
-        final floatID = 'NPhpMGikM1HChWRjz2mID'
-        final out = """
-            id: $floatID                                                                                                                                      
+        def res = new CmdResult()
+
+        when:
+        res.out = """
+            id: NPhpMGikM1HChWRjz2mID                                                                                                                                      
             name: python-c5ad.large         
             user: admin                                                                                                                                            [0/1817]
             imageID: python:3.9-slim
@@ -80,24 +74,21 @@ class FloatJobTest extends Specification {
             stdout: stdout.autosave
             stderr: stderr.autosave
             inputArgs: ' -j s3://mmce-test-cicd/mmcetest.sh  -i python  --tag 3.9-slim  --rootVolSize 47  --imageVolSize 4  -m 2  -c 1 '
-            customTags:
-                nf-job-id: $id
             """.stripIndent().trim()
 
-        when:
-        final job = FloatJob.parse(out)
-
         then:
-        job.nfJobID == id
-        job.status == FloatStatus.DONE
-        job.rc == "0"
-        job.rcCode == 0
-        !job.isRunning()
+        res.jobID() == "NPhpMGikM1HChWRjz2mID"
+        res.status() == "Completed"
+        res.jobRC() == "0"
+        !res.isJobRunning()
     }
 
     def "check is job running"() {
         given:
-        final out = """
+        def res = new CmdResult()
+
+        when:
+        res.out = """
             id: QOZCuHxDQlj52mSDBHmJe
             name: cactus-c5ad.large
             workingHost: 35.86.197.248 (2Core4GB/Spot)
@@ -109,17 +100,16 @@ class FloatJobTest extends Specification {
             cost: 0.0012 USD
             """.stripIndent().trim()
 
-        when:
-        final job = FloatJob.parse(out)
-
         then:
-        job.isRunning()
-        job.status == FloatStatus.PENDING
+        res.isJobRunning()
     }
 
     def "get queue status"() {
         given:
-        final out = """
+        def res = new CmdResult()
+
+        when:
+        res.out = """
         [
             {
                 "id": "QPj8nsNWfLam6VQWbeGnp",                                                                                           
@@ -127,9 +117,8 @@ class FloatJobTest extends Specification {
                 "user": "admin",                                                                                                         
                 "imageID": "docker.io/memverge/cactus:latest",                                                                           
                 "status": "FailToExecute",
-                "rc": "2",
                 "customTags": {
-                    "nf-job-id": "job-1",
+                    "nf-job-id": "job-a",
                     "a": "apple"
                 }                                                                                                                                                                                                                                                                                                                         
             },
@@ -142,33 +131,28 @@ class FloatJobTest extends Specification {
                 "status": "Executing",
                 "customTags": {
                     "b": "banana",
-                    "nf-job-id": "job-3"
+                    "nf-job-id": "job-b"
                 }
             }
         ]"""
-
-        when:
-        def stMap = FloatJob.parseJobMap(out)
-        def st1 = stMap['job-1']
-        def st2 = stMap['job-3']
+        def stMap = res.getQStatus()
+        def st1 = stMap['QPj8nsNWfLam6VQWbeGnp']
+        def st2 = stMap['u5x3sSLe0p3OznGavmYu3']
 
         then:
-        st1.status == FloatStatus.ERROR
-        st1.nfJobID == 'job-1'
-        st1.floatJobID == 'QPj8nsNWfLam6VQWbeGnp'
-        st1.rcCode == 2
-        st2.status == FloatStatus.RUNNING
-        st2.nfJobID == 'job-3'
-        st2.floatJobID == 'u5x3sSLe0p3OznGavmYu3'
-        st2.rcCode == null
+        st1.status == 'FailToExecute'
+        st1.taskID == 'job-a'
+        st2.status == 'Executing'
+        st2.taskID == 'job-b'
     }
 
     def "get queue empty"() {
         given:
-        final out = """No jobs"""
+        def res = new CmdResult()
 
         when:
-        def stMap = FloatJob.parseJobMap(out)
+        res.out = """No jobs"""
+        def stMap = res.getQStatus()
 
         then:
         stMap.size() == 0
